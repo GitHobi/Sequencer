@@ -1,0 +1,384 @@
+<html>
+<style>
+    div {
+        background-color: orange;
+        width: 90px;
+        height: 45px;
+        position: absolute;
+        text-align: center;
+        vertical-align: middle;
+        line-height: 45px;
+
+    }
+</style>
+
+<body>
+
+    <script>
+
+        class Node {
+            constructor(id) {
+                this.id = id;
+                this.childs = [];
+                this.parents = [];
+                this.x = 0;
+                this.y = 0;
+                this.calculatedMaxX = -1;
+                this.depth = 0;
+
+                this.isEndNode = false;
+                this.parallelStart = false;
+                this.visitCount = 0;
+
+
+            }
+
+            appendChild(node) {
+                this.childs.push(node);
+                node.parents.push(this);
+            }
+
+            get numberOfChilds() {
+                return this.childs.length;
+            }
+
+
+            incDepth() {
+                var maxDepth = 0;
+                for (var i = 0; i < this.childs.length; i++) {
+                    var lmax = this.childs[i].incDepth();
+                    if (lmax > maxDepth) {
+                        maxDepth = lmax;
+                    }
+                }
+                this.depth = maxDepth + 1;
+                return this.depth;
+            }
+
+            incX(value) {
+                this.calculatedMaxX = -1;
+                this.x += value;
+                for (var i = 0; i < this.childs.length; i++) {
+                    this.childs[i].incX(value);
+                }
+            }
+
+            incY(value) {
+                this.y += value;
+                for (var i = 0; i < this.childs.length; i++) {
+                    this.childs[i].incY(value);
+                }
+            }
+
+            get maxX() {
+
+                if (this.calculatedMaxX < 0) { // Prevent recursion!
+                    var maxX = this.x;
+                    if (this.childs.length == 0) {
+                        this.calculatedMaxX = maxX;
+                        return this.calculatedMaxX;
+                    } else {
+
+                        for (var i = 0; i < this.childs.length; i++) {
+                            var childMaxX = this.childs[i].maxX;
+                            if (childMaxX > maxX) {
+                                maxX = childMaxX;
+                            }
+                        }
+                        this.calculatedMaxX = maxX;
+                    }
+                    return this.calculatedMaxX;
+                } else {
+                    return this.calculatedMaxX;
+                }
+
+            }
+
+        }
+
+        var nodeList = []
+        var nodeIds = 0;
+        function createNode() {
+            var newNode = new Node(nodeIds++);
+            nodeList.push(newNode);
+            return newNode;
+        }
+
+        var node0 = createNode();
+        var node1 = createNode();
+        var node2 = createNode();
+        var node3 = createNode();
+        var node4 = createNode();
+        var node5 = createNode();
+        var node6 = createNode();
+        var node7 = createNode();
+        var node8 = createNode();
+        var node9 = createNode();
+        var node10 = createNode();
+        var node11 = createNode();
+        var node12 = createNode();
+
+        node0.appendChild(node1);
+        node0.appendChild(node2);
+        node0.appendChild(node3);
+        node0.appendChild(node4);
+
+        node1.appendChild(node9);
+
+        node2.appendChild(node5);
+        node2.appendChild(node6);
+
+        node4.appendChild(node7);
+        node7.appendChild(node8);
+        node8.appendChild(node9);
+
+        node9.appendChild(node10);
+        node10.appendChild(node11);
+        node10.appendChild(node12);
+
+
+        /*
+                node0.appendChild(node1);
+                node0.appendChild(node2);
+                node8.appendChild(node10);
+                node2.appendChild(node4);
+                node2.appendChild(node5);
+                node5.appendChild(node6);
+                node6.appendChild(node7);
+                node7.appendChild(node3);
+                node1.appendChild(node8);
+                node1.appendChild(node9);
+                node7.appendChild(node11);
+        */
+        //        node10.appendChild(node12);
+        //        node3.appendChild(node12);
+        //        node11.appendChild(node12);
+
+
+        /*
+            Goal:
+            We want to split the nodes into layers.
+            We do this with following algorithm:
+            a) Search all nodes not having a parent - but these nodes into a layer
+            b) remove these nodes from the list
+            c) remove the "parent count" of their childs by one
+            d) continue with a) as long as you have nodes in the list.
+        */
+        function TopSort(nodeList) {
+            var dictionary = [];
+
+            for (var i = 0; i < nodeList.length; i++) {
+                var node = nodeList[i];
+                dictionary[node.id] = {
+                    id: node.id,
+                    nodeRef: node,
+                    childs: node.childs,
+                    parents: node.parents.length
+                };
+            }
+     
+            var layers = [];
+            var done = false;
+            while (!done) {
+                done = true;
+                var layerList = [];
+                for (var i = 0; i < dictionary.length; i++) {
+                    if (dictionary[i].parents == 0) {
+                        done = false;
+                        //console.log(dictionary[i].nodeRef.id);
+                        layerList.push(dictionary[i].nodeRef);
+                    }
+                }
+                if (!done) {
+                    layers.push(layerList);
+                    //console.log(layerList);
+                    layerList.forEach(function (a) {
+                        // 
+                        // reduce from each reachable child the parent count by 1
+                        //
+                        for (var j = 0; j < a.childs.length; j++) {
+                            var thisChild = a.childs[j].id;
+                            var idx = dictionary.findIndex(function (elem) {
+                                return thisChild == elem.id;
+                            });
+                            if (idx == -1) {
+                                console.warn("...");
+                            } else {
+                                dictionary[idx].parents -= 1;
+                            }
+                        }
+
+                        //
+                        // remove the source from the dictionary
+                        //
+                        var idx = dictionary.findIndex(function (elem) {
+                            return a.id == elem.id;
+                        });
+                        if (idx == -1) {
+                            console.warn("Should not happen! Element not found in Dictionary!");
+                        } else {
+                            dictionary.splice(idx, 1); // remove element from dictionary
+                        }
+                    });
+                }
+            }
+
+            return layers;
+
+        }
+
+
+
+        /*
+            Algorithmus nach Reingold Tilford 1983
+            * draw the left subtree
+            * draw the right subtree
+            * place the drawings of the subtrees at horizonal distance 2
+            * place the root one level above and half-way between the childs
+            * if there is only one child, place the root at the horizontal distance 1 from the child
+        */
+        function Draw(root) {
+            console.log(root.id);
+            if (root.visitCount > 0) {
+                return false;
+            }
+            root.visitCount += 1;
+
+            switch (root.numberOfChilds) {
+
+                case 0:
+                    root.y += 1;
+                    root.isEndNode = true;
+                    return true;
+                    break;
+
+                case 1:
+                    var ret = Draw(root.childs[0]);
+                    if (!ret) {
+                        root.childs.pop();
+                    } else {
+                        if (root.childs[0].isEndNode) {
+                            root.isEndNode = true;
+                        }
+                    }
+
+                    root.incY(1);
+                    root.incDepth();
+                    return true;
+                    break;
+
+                default:
+                    root.parallelStart = true;
+
+                    for (var i = 0; i < root.numberOfChilds; i++) {
+
+                        var ret = Draw(root.childs[i]);
+                        if (!ret) {
+                            root.childs.pop();
+                        } else {
+                            if (root.childs[i].isEndNode) {
+                                root.isEndNode = true;
+                            }
+                        }
+
+                    }
+
+                    root.incY(1);
+                    root.incDepth();
+
+
+                    root.childs.sort(function (a, b) {
+                        //return a.depth - b.depth; //shortes path left
+                        return b.depth - a.depth; //shortes path right
+                    });
+
+
+                    for (var i = 0; i < root.numberOfChilds - 1; i++) {
+                        var moveDistanceX = root.childs[i].maxX;
+                        root.childs[i + 1].incX(moveDistanceX + 1);
+                    }
+
+                    return true;
+
+                // Root-Node platzieren
+                //root.x = root.childs[0].x + maxChildX + 0.0; // maximale Linksausrichtung, daher nichts zu addieren.
+
+
+
+
+            }
+
+        }
+
+        function AssignLevel(nodeList, layers) {
+
+            var y = 0;
+            layers.forEach(function (layer) {
+                layer.forEach(function (node) {
+                    node.y = y;
+                });
+                y++;
+            });
+
+        }
+
+        /*
+            Goal:
+            We want to have "closings" as far left as possible
+            Laufzeit: O(n)
+        */
+        function Balance(layerList) {
+
+            // We want to work top-down - so we use the layer list, 
+            // as in this list we have the nodes sorted top down.
+            // need to get a flat list first.
+            var nodeList = layerList.flat();
+
+            // now search all closings = nodes with more than one parent
+            var closings = [];
+            for (var i = 0; i < nodeList.length; i++) {
+                if (nodeList[i].parents.length > 1) {
+                    closings.push(nodeList[i]);
+                }
+            }
+
+            // align the closings with their leftest parent
+            closings.forEach(function (node) {
+                var minX = node.x;
+                node.parents.forEach(function (n) {
+                    if (n.x < minX) {
+                        minX = n.x;
+                    }
+                })
+                var deltaX = node.x - minX;
+                node.incX ( -deltaX );
+            })
+
+
+
+        }
+
+        var layers = TopSort(nodeList);
+        Draw(node0);
+
+        AssignLevel(nodeList, layers);
+        Balance(layers);
+
+
+        /*
+            Create DIVs to show the nodes
+        */
+        for (var i = 0; i < nodeList.length; i++) {
+            var node = nodeList[i];
+            var elem = document.createElement('div');
+            elem.id = "d" + node.id;
+            elem.style.left = node.x * 50 * 2;
+            elem.style.top = node.y * 50;
+            elem.innerHTML = elem.id;
+            document.getElementsByTagName('body')[0].appendChild(elem);
+        }
+    </script>
+
+</body>
+
+</html>
