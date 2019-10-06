@@ -1,0 +1,690 @@
+<html>
+<style>
+    div {
+        background-color: orange;
+        width: 90px;
+        height: 45px;
+        position: absolute;
+        text-align: center;
+        vertical-align: middle;
+        line-height: 45px;
+
+    }
+</style>
+
+<body>
+
+    <!-- 
+        Implementierungsidee
+
+        a) der Graph wird topologisch sortiert.
+        b) die Sortierung wird dahingend überprüft, dass alle Vorgänger eines Nodes in einer höheren Schicht sein müssen.
+           Sollte dies für einen Node nicht der Fall sein, wird dieser Node eine Schicht nach unten geschoben.
+        c) Innerhalb der Schichten werden die Knoten "passend" sortiert.
+
+        d) die Knoten werden schichtweise anhand ihrer Sortierung in eine Zeichenmatrix eingefügt.
+        e) Dabei wird basierend auf dem Grpah ermittelt unter welchem Node ein ein Node hängen muss.
+           Ist dieser Platz belegt, wird der Node an den nächsten freien Platz gesetzt.
+           Gegebenfalls wird der Inhalt der Matrix passend verschoben um Platz zu schaffen
+
+        Algorithmus nach Hobelsberger, Pertl, Staritzbichler, 2019
+
+
+    -->
+
+    <script>
+        "use strict";
+
+        class Node {
+            constructor(id) {
+                this.id = id;
+                this.name = "none";
+                this.childs = [];
+                this.parents = [];
+                this.branchList = [];
+                this.x = 0;
+                this.y = 0;
+                this.calculatedMaxX = -1;
+                this.depth = 0;
+                this.weight = 0;
+            }
+
+            appendChild(node) {
+                this.childs.push(node);
+                node.parents.push(this);
+            }
+
+            appendChilds(nodeArray) {
+                var parent = this;
+                nodeArray.forEach(function (node) {
+                    parent.appendChild(node);
+                });
+            }
+
+            get numberOfChilds() {
+                return this.childs.length;
+            }
+
+            incDepth() {
+                var maxDepth = 0;
+                for (var i = 0; i < this.childs.length; i++) {
+                    var lmax = this.childs[i].incDepth();
+                    if (lmax > maxDepth) {
+                        maxDepth = lmax;
+                    }
+                }
+                this.depth = maxDepth + 1;
+                return this.depth;
+            }
+
+            incX(value) {
+                this.calculatedMaxX = -1;
+                this.x += value;
+                for (var i = 0; i < this.childs.length; i++) {
+                    this.childs[i].incX(value);
+                }
+            }
+
+            incY(value) {
+                this.y += value;
+                for (var i = 0; i < this.childs.length; i++) {
+                    this.childs[i].incY(value);
+                }
+            }
+
+            get maxX() {
+
+                if (this.calculatedMaxX < 0) { // Prevent recursion!
+                    var maxX = this.x;
+                    if (this.childs.length == 0) {
+                        this.calculatedMaxX = maxX;
+                        return this.calculatedMaxX;
+                    } else {
+
+                        for (var i = 0; i < this.childs.length; i++) {
+                            var childMaxX = this.childs[i].maxX;
+                            if (childMaxX > maxX) {
+                                maxX = childMaxX;
+                            }
+                        }
+                        this.calculatedMaxX = maxX;
+                    }
+                    return this.calculatedMaxX;
+                } else {
+                    return this.calculatedMaxX;
+                }
+
+            }
+
+        }
+
+        var nodeList = []
+        var nodeIds = 0;
+        function createNode(nodeName = "none") {
+            var newNode = new Node(nodeIds++);
+            newNode.name = nodeName;
+            nodeList.push(newNode);
+            return newNode;
+        }
+
+        function edge(nameA, nameB) {
+            var nodeA = nodeList.find(function (a) {
+                return a.name == nameA;
+            })
+
+            var nodeB = nodeList.find(function (a) {
+                return a.name == nameB;
+            })
+
+            if (nodeA == undefined) {
+                nodeA = createNode(nameA);
+            }
+
+            if (nodeB == undefined) {
+                nodeB = createNode(nameB);
+            }
+
+            nodeA.appendChild(nodeB);
+        }
+
+
+        //edge("START", "A");
+        edge("START", "B");
+        edge("START", "C");
+
+        edge("C", "D");
+        edge("C", "E");
+
+        edge("D", "F");
+        edge("E", "F");
+
+        edge("C", "X");
+        edge("X", "Y");
+        edge("Y", "Z");
+
+        /*
+                edge("A", "A1")
+                edge("A1", "A2")
+                edge("A2", "A3")
+                edge("A3", "A4")
+                edge("A4", "A5")
+        */
+
+
+        edge("B", "Ba")
+        edge("B", "B1")
+        edge("B1", "B2")
+
+
+        edge("B2", "END");
+        edge("F", "END");
+
+        var node0 = nodeList[0];
+
+
+        /*
+            Algorithmus nach Reingold Tilford 1983
+            * draw the left subtree
+            * draw the right subtree
+            * place the drawings of the subtrees at horizonal distance 2
+            * place the root one level above and half-way between the childs
+            * if there is only one child, place the root at the horizontal distance 1 from the child
+        */
+        function CalculateDepthOfNode(root) {
+            console.log(root.id);
+
+            switch (root.numberOfChilds) {
+
+                case 0:
+                    root.depth = 0;
+                    break;
+                case 1:
+                    root.childs[0].branchList = root.branchList;
+                    root.childs[0].branchList = root.childs[0].branchList.concat([root.name]);
+                    CalculateDepthOfNode(root.childs[0]);
+                    root.depth = root.childs[0].depth + 1;
+                    break;
+                default:
+                    var maxDepth = 0;
+                    for (var i = 0; i < root.numberOfChilds; i++) {
+                        root.childs[i].branchList = root.branchList;
+                        root.childs[i].branchList = root.childs[i].branchList.concat([root.name]);
+                        var localDepth = CalculateDepthOfNode(root.childs[i]);
+                        if (localDepth > maxDepth) {
+                            maxDepth = localDepth;
+                        }
+                    }
+
+                    root.depth = maxDepth + 1;
+                    break;
+            }
+
+            return root.depth;
+        }
+
+
+        function CalculateNodeWeight(root) {
+            switch (root.numberOfChilds) {
+                case 0:
+                    root.weight = 0;
+                    break;
+                default:
+                    var maxWeight = 0;
+                    for (var i = 0; i < root.numberOfChilds; i++) {
+                        var localWeight = CalculateNodeWeight(root.childs[i]);
+                        if (localWeight > maxWeight) {
+                            maxWeight = localWeight;
+                        }
+                    }
+                    root.weight = maxWeight + 1;
+                    break;
+            }
+            return root.weight;
+        }
+
+        /*
+                    Goal:
+                    We want to split the nodes into layers.
+                    We do this with following algorithm:
+                    a) Search all nodes not having a parent - but these nodes into a layer
+                    b) remove these nodes from the list
+                    c) remove the "parent count" of their childs by one
+                    d) continue with a) as long as you have nodes in the list.
+                */
+        function TopSort(nodeList) {
+
+            console.log("Performing TopSort to find basic hierarchy");
+
+            var dictionary = [];
+
+            for (var i = 0; i < nodeList.length; i++) {
+                var node = nodeList[i];
+                dictionary[node.id] = {
+                    id: node.id,
+                    nodeRef: node,
+                    childs: node.childs,
+                    parents: node.parents.length
+                };
+            }
+
+            var layers = [];
+            var done = false;
+            while (!done) {
+                done = true;
+                var layerList = [];
+                var layerString = "";
+                for (var i = 0; i < dictionary.length; i++) {
+                    if (dictionary[i].parents == 0) {
+                        done = false;
+                        //console.log(dictionary[i].nodeRef.id);
+                        layerList.push(dictionary[i].nodeRef);
+                        layerString = layerString + " " + dictionary[i].id;
+                    }
+                }
+                if (!done) {
+
+                    layerList.sort(function (a, b) {
+                        if (a.childs.length == 0 || b.childs.length == 0) {
+                            return 0;
+                        }
+                        return a.childs[0].id == b.childs[0].id ? 0 : 1;
+                    });
+
+                    layers.push(layerList);
+                    console.log(layerString);
+                    layerList.forEach(function (a) {
+                        // 
+                        // reduce from each reachable child the parent count by 1
+                        //
+                        for (var j = 0; j < a.childs.length; j++) {
+                            var thisChild = a.childs[j].id;
+                            var idx = dictionary.findIndex(function (elem) {
+                                return thisChild == elem.id;
+                            });
+                            if (idx == -1) {
+                                console.warn("...");
+                            } else {
+                                dictionary[idx].parents -= 1;
+                            }
+                        }
+
+                        //
+                        // remove the source from the dictionary
+                        //
+                        var idx = dictionary.findIndex(function (elem) {
+                            return a.id == elem.id;
+                        });
+                        if (idx == -1) {
+                            console.warn("Should not happen! Element not found in Dictionary!");
+                        } else {
+                            dictionary.splice(idx, 1); // remove element from dictionary
+                        }
+                    });
+                }
+            }
+
+            return layers;
+
+        }
+
+
+        function GetLeftestParent(node) {
+
+            if (node.parents.length == 0) {
+                return 0;
+            }
+
+            var x = Number.MAX_VALUE;
+            node.parents.forEach(function (n) {
+                if (n.x < x) {
+                    x = n.x;
+                }
+            })
+
+            return x;
+        }
+
+        function GetRightestParent(node) {
+
+            if (node.parents.length == 0) {
+                return 0;
+            }
+
+            var x = 0;
+            node.parents.forEach(function (n) {
+                if (n.x > x) {
+                    x = n.x;
+                }
+            })
+
+            return x;
+        }
+
+
+        function isColumnFree(matrix, x, levelStart, levelEnd) {
+            console.log("is ColumnFree: " + x + " " + levelStart + " " + levelEnd);
+            var result = true;
+            for (var layer = levelStart; layer >= levelEnd; layer--) {
+                if (matrix[layer][x] != undefined) {
+                    result = false;
+                    break;
+                }
+            }
+            return result;
+        }
+
+
+
+
+        function freeColumn(matrix, x, levelStart, levelEnd) {
+            for (var layer = levelStart; layer >= levelEnd; layer--) {
+                for (var column = matrix[layer].length; column > x; column--) {
+                    if (matrix[layer][column - 1] != undefined) {
+                        matrix[layer][column - 1].x = column;
+                    }
+                    matrix[layer][column] = matrix[layer][column - 1];
+                }
+                matrix[layer][x] = undefined;
+            }
+
+        }
+
+
+        function SortLayerList(layerList, sortFunction) {
+            for (var y = 0; y < layerList.length; y++) {
+                var layer = layerList[y];
+                layer.sort(sortFunction);
+            }
+        }
+
+
+        function matrixColumnOwner(matrix, level, x) {
+            for (var i = level; level >= 0; level--) {
+                if (matrix[level][x] != undefined) {
+                    return matrix[level][x];
+                }
+            }
+        }
+
+        function deepestPostionForNode(nodeList, node) {
+
+
+            if (node.parents.length == 1) {
+                return undefined; // bei einem Knonten mit nur einem Parent egal.
+            }
+
+            //console.log("deepest: " + node.name);
+            //for (var i = 0; i < node.parents.length; i++) {
+            //    console.log("deepest: " + node.parents[i].name + " ---> " + node.parents[i].branchList);
+            //}
+
+            var schnitt = node.parents[0].branchList; // Schnittmenge
+            for (var i = 1; i < node.parents.length; i++) {
+                schnitt = schnitt.filter(value => -1 !== node.parents[i].branchList.indexOf(value))
+            }
+            //console.log("schnitt: ---> " + schnitt);
+
+            return schnitt.pop();
+
+
+            // wenn wir mehr als einen Parent haben, wollen wir tiefer sein als der umschließende parallele Ast
+
+        }
+
+        // mappe eine namen auf ein Object
+        // Sollte man effizienter machen - aber mei :)
+        function nodeNameToNodeObject(nodeList, nodeName) {
+            for (var i = 0; i < nodeList.length; i++) {
+                var node = nodeList[i];
+                if (node.name == nodeName) {
+                    return node;
+                }
+            }
+
+            return null;
+        }
+
+
+        /*
+            we need to find the deepest point in a branch
+            consider this graph:
+
+            |
+            C------
+            |  |  |
+            D  E  X
+            |  |  |
+            |  |  y
+            |  |  |
+            |  |  Z
+            F--|
+            |
+
+            We want to find the deepest point of C ... in this case this point is Z.
+            We do this by DFS (depth first search) - our break criteria is 
+            a) we have no childs - then we're the current deepest point
+            b) from one of our childs it is possible to reach a child of the end point (F
+        */
+        function farestNodeInBranch_work(startNode, targetChilds) {
+
+            switch (startNode.numberOfChilds) {
+                case 0:
+                    // ich habe keine Childs - d.h. ich bin mal ein Ende
+                    return { node: startNode, depth: 0 };
+                    break;
+                default:
+                    var maxDepth = -1;
+                    var bestData = { node: startNode, depth: 0 };;
+
+                    var reachedAEnd = targetChilds.some(r => startNode.childs.includes(r)); // prüfen ob einer der targetChilds von diesem Knoten aus schon erreicht werden kann.
+
+                    if (!reachedAEnd) {
+
+                        for (var i = 0; i < startNode.numberOfChilds; i++) {
+
+                            var child = startNode.childs[i];
+
+                            var data = farestNodeInBranch_work(child, targetChilds);
+                            if (data.depth > maxDepth) {
+                                maxDepth = data.depth;
+                                bestData = data;
+                            }
+                        }
+                    }
+                    return { node: bestData.node, depth: maxDepth + 1 };
+                    break;
+            }
+        }
+
+        function farestNodeInBranch(nodeList, startNode, endNode) {
+
+            console.log("searching longest way from " + startNode.name + " to " + endNode.name);
+            var data = farestNodeInBranch_work(startNode, endNode.childs);
+            return data.node;
+        }
+
+
+        /*
+            we'll rearange our layers now.
+            we need to make sure that "node" is a deeper layer than "deep"
+        */
+        function ensureNodeIsInLowerLayerThan ( layerList, node, deep) {
+
+            var layerOfNode = undefined;
+            var positionInList = undefined;
+
+            for ( var i=0;i<layerList.length; i++ ) {
+
+                var layer = layerList[i];
+                if ( layer.includes(node) ) {
+                    layerOfNode = i;
+                    positionInList = layer.indexOf(node);
+                }
+
+                if ( layer.includes(deep) ) {
+                    // we found our reference
+                    // two cases:
+                    // a) we did not yet find "node" => node is in a lower layer => we're done;
+                    if ( layerOfNode == undefined ) return;
+
+                    // b) we found already "node" => we need to push it to the next layer.
+                    layerList[layerOfNode].splice ( positionInList, 1);
+                    if ( layerList[i+1] == undefined ) {
+                        layerList[i+1] = []
+                    }
+                    layerList[i+1].unshift ( node );
+                    return;
+                }
+            }
+
+            console.warn ( "reached a position which we should not reach");
+            return; // we actually should not reach this point!
+        }
+
+        /*
+            Precondition: We have a basic layering in the layerList.
+            Problem:    The layering currently does not take into consideration that 
+                        nodes closing a parallel branch should be deeper than the deepest branch of all parallel branches.
+                        Thus we'll now try to reorder the layerList to have all closings at the lowest points.
+        */
+        function SortLayerListVertically(nodeList, layerList) {
+            console.log("Performing circle search to find parallel starts for parallel close")
+            var refNodes = [];
+            for (var i = 0; i < nodeList.length; i++) {
+                var node = nodeList[i];
+                if (node.parents.length > 1) {
+                    var refNodeName = deepestPostionForNode(nodeList, node);
+                    var refNode = nodeNameToNodeObject(nodeList, refNodeName);
+
+                    var deep = farestNodeInBranch(nodeList, refNode, node);
+
+                    console.log("node " + node.name + " is closing " + refNode.name + " ... deepest point in that branch: " + deep.name);
+                    refNodes[node.name] = refNode;
+                    ensureNodeIsInLowerLayerThan ( layerList, node, deep);
+                }
+            }
+
+            console.log(refNodes);
+        }
+
+
+        CalculateDepthOfNode(node0);
+        CalculateNodeWeight(node0);
+        var layerList = TopSort(nodeList);
+        SortLayerListVertically(nodeList, layerList);
+        SortLayerList(layerList, function (a, b) { return a.parents.length - b.parents.length; });
+        SortLayerList(layerList, function (a, b) { return b.weight - a.weight; });
+
+        /*
+        nodeList.forEach(function (node) {
+            console.log("Depth: " + node.id + " => " + node.depth + " - " + node.weight);
+        });
+        */
+
+
+        var matrix = [];
+
+        for (var y = 0; y < layerList.length; y++) {
+
+            console.log("Processing layer " + y + " -----------------");
+
+            if (matrix[y] == undefined) {
+                matrix[y] = [];
+            }
+            var layer = layerList[y];
+
+            var desiredPosition = 0;
+            for (var nodeNr = 0; nodeNr < layer.length; nodeNr++) {
+
+                var node = layer[nodeNr];
+                console.log("placing node " + node.name);
+
+                var needAdjust = false;
+                var x = GetLeftestParent(node);
+                if (matrix[y][x] != undefined) {
+                    console.log("node " + node.name + ": need position " + x + " - but occupied");
+                    needAdjust = true;
+                }
+
+                // zwei Fälle:
+                // a) die Spalte ist nicht frei - aber darüber ist nichts
+                // b) die Spalte ist nicht frei - sie gehört aber schon einem anderen Parent
+                if (needAdjust) {
+                    while (matrix[y][x] != undefined) {
+                        x++;
+                        var columnOwner = matrixColumnOwner(matrix, y - 1, x);
+                        console.log("Column owner: " + x + " " + (columnOwner != undefined ? columnOwner.name : ""));
+                        if (columnOwner != undefined) {
+                            // fall b ... wir schieben die Tabelle nach rechts um Platz zu schaffen
+                            // wichtig - wir verschieben von x-1, weil es ggfs. auch schon Einträge auf dieser Ebene gibt.
+                            freeColumn(matrix, x, y, node.parents[0].y);
+                            needAdjust = false; // fall a
+                        }
+
+                    }
+                }
+
+                // we moved node right 
+                // now ensure that the column upwards to the level of the parent is free
+                if (needAdjust) {
+                    console.log("adjustment needed ...");
+                    if (node.parents.length > 0 && !isColumnFree(matrix, x, y - 1, node.parents[0].y)) {
+                        console.log("node " + node.name + ": Column not free");
+                        freeColumn(matrix, x, y - 1, node.parents[0].y);
+                    }
+                }
+
+                // check that the connectin between rightest and leftest parent is free
+                needAdjust = false;
+                if (node.parents.length > 1) {
+                    var maxX = GetRightestParent(node);
+                    if (maxX != x) {
+                        for (var i = x; i <= maxX; i++) {
+                            if (matrix[y][i] != undefined) {
+                                needAdjust = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (needAdjust) {
+                    // push to next layer
+                    if (layerList[y + 1] == undefined) {
+                        layerList[y + 1] = [];
+                    }
+                    console.log("pushing node " + node.name + " to next level!");
+                    layerList[y + 1].unshift(node);
+
+                }
+                else {
+
+                    matrix[y][x] = node;
+                    node.x = x;
+                    node.y = y;
+                    console.log("placing node " + node.name + " to " + x);
+                }
+
+
+            }
+        }
+
+
+
+        /*
+            Create DIVs to show the nodes
+        */
+        for (var i = 0; i < nodeList.length; i++) {
+            var node = nodeList[i];
+            var elem = document.createElement('div');
+            elem.id = node.name;
+            elem.style.left = node.x * 50 * 2;
+            elem.style.top = node.y * 50;
+            elem.innerHTML = elem.id;
+            document.getElementsByTagName('body')[0].appendChild(elem);
+        }
+    </script>
+
+</body>
+
+</html>
